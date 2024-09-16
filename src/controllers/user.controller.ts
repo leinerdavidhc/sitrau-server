@@ -3,16 +3,15 @@ import { encryptPassword, comparePasswords } from "../libs/bcrypt.util";
 import { User, UserAddI, UserGetI } from "../models/user.model";
 import jwt from "jsonwebtoken";
 import config from "../config";
-import { RefreshToken } from "../models/RefreshToken.model";
+import nodemailer from "nodemailer"
 
 export default class UserController {
-  // Crear usuario
   public static async createUser(req: Request, res: Response) {
     const { dni, name, lastName, password, email, phone } = req.body;
     try {
       // Verificar si ya existe un usuario activo
       const existingUser: UserGetI[] | null = await User.findAll({
-        where: { active: true },
+        where: { email, active: true },
       });
       if (existingUser.length > 0) {
         return res
@@ -34,30 +33,60 @@ export default class UserController {
       };
       const createdUser = await User.create(user);
 
-      res.status(200).json({
-        success: true,
-        message: "Usuario creado exitosamente.",
-        user: {
-          dni: createdUser.dni,
-          name: createdUser.name,
-          lastName: createdUser.lastName,
-        },
-      });
+      res
+        .status(200)
+        .json({
+          success: true,
+          message: "Usuario creado exitosamente.",
+          user: {
+            dni: createdUser.dni,
+            name: createdUser.name,
+            lastName: createdUser.lastName,
+          },
+        });
     } catch (error) {
       console.error("Error al crear el usuario:", error);
-      res.status(500).json({
-        success: false,
-        message: "Error interno del servidor al crear el usuario.",
-        error,
-      });
+      res
+        .status(500)
+        .json({
+          success: false,
+          message: "Error interno del servidor al crear el usuario.",
+          error,
+        });
     }
   }
 
-  // Login del usuario
+  public static async PreCreateUser(req: Request, res: Response) {
+    const {email} = req.body;
+
+    try {
+      // Verificar si ya existe un usuario activo
+      const existingUser: UserGetI[] | null = await User.findAll({
+        where: { email, active: true },
+      });
+      if (existingUser.length > 0) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Ya existe un usuario activo." });
+      }
+      res.sendStatus(200);
+    }catch (error) {
+        console.error("Error al encontrar el usuario:", error);
+        res
+          .status(500)
+          .json({
+            success: false,
+            message: "Error interno del servidor al enconrtar el usuario.",
+            error,
+          });
+      }
+  }
+
+
   public static async login(req: Request, res: Response) {
     const { email, password } = req.body;
     try {
-      const user = await User.findOne({ where: { email, active: true } });
+      const user = await User.findOne({ where: { email , active: true} });
 
       if (!user) {
         return res
@@ -75,7 +104,7 @@ export default class UserController {
       }
 
       // Generar token JWT
-      const token = jwt.sign(
+     const token = jwt.sign(
         {
           userId: user.id,
           name: user.name,
@@ -96,8 +125,6 @@ export default class UserController {
         .json({ success: false, message: "Error interno del servidor", error });
     }
   }
-
-  // Obtener datos protegidos
   public static async getProtectedData(req: Request, res: Response) {
     const user = req.user;
     res
@@ -105,86 +132,54 @@ export default class UserController {
       .json({ authorized: true, message: "Acceso permitido", user });
   }
 
-  // Logout del usuario
-  public static async logout(req: Request, res: Response) {
+  //controlador que crea un codigo de 6 digitos de numero aleatorio y los envia al correo de la perosna y devuelve el codigo en la respuesta de la peticion
+
+  public static async generateCode(req: Request, res: Response) {
+    const { email } = req.body;
+  
     try {
-      const refreshToken = req.body.refreshToken;
-
-      if (!refreshToken) {
-        return res.status(400).json({ success: false, message: "No se envió el refresh token" });
-      }
-
-      // Buscar el refresh token en la base de datos
-      const tokenInDb = await RefreshToken.findOne({ where: { token: refreshToken } });
-
-      if (!tokenInDb) {
-        return res.status(400).json({ success: false, message: "Refresh token no válido" });
-      }
-
-      // Eliminar el refresh token de la base de datos
-      await RefreshToken.destroy({ where: { token: refreshToken } });
-
-      // Responder que el usuario ha sido deslogueado exitosamente
-      res.status(200).json({ success: true, message: "Logout exitoso, token eliminado" });
+      const code = Math.floor(100000 + Math.random() * 900000);
+      const transporter = nodemailer.createTransport({
+        service: "gmail",
+        auth: {
+          user: config.email,
+          pass: config.passwordEmail,
+        },
+      });
+  
+      const mailOptions = {
+        from: config.email,
+        to: email,
+        subject: "Código de verificación",
+        html: `
+          <div style="background-color: #f8f9fd; padding: 20px; font-family: Arial, sans-serif; color: #0b0e14;">
+            <div style="max-width: 600px; margin: auto; background-color: white; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);">
+              <h2 style="color: #ed500a; text-align: center;">¡Código de Verificación!</h2>
+              <p style="font-size: 16px; line-height: 1.5;">
+                ¡Hola! Gracias por registrarte. Para completar tu registro, por favor ingresa el siguiente código de verificación:
+              </p>
+              <div style="margin: 20px 0; padding: 10px; text-align: center; background-color: #0b0e14; color: #f8f9fd; font-size: 24px; border-radius: 5px;">
+                <strong>${code}</strong>
+              </div>
+              <p style="font-size: 16px; line-height: 1.5;">
+                Si no solicitaste este código, por favor ignora este mensaje.
+              </p>
+              <p style="text-align: center; margin-top: 20px;">
+                <small style="color: #888;">© 2024 Tu Empresa. Todos los derechos reservados.</small>
+              </p>
+            </div>
+          </div>
+        `,
+      };
+  
+      // Usar la versión basada en promesas de sendMail con await
+      await transporter.sendMail(mailOptions);
+  
+      return res.status(200).json({ success: true, message: "Código enviado", code });
     } catch (error) {
-      console.error("Error al cerrar sesión:", error);
-      res
-        .status(500)
-        .json({ success: false, message: "Error interno del servidor", error });
+      console.error("Error al generar el código o enviar el correo:", error);
+      return res.status(500).json({ success: false, message: "Error al generar el código o enviar el correo" });
     }
   }
-
-  public static async refreshAuthToken (req: Request, res: Response) {
-    const { refreshToken } = req.body;
   
-    if (!refreshToken) {
-      return res.status(400).json({ success: false, message: "Refresh token es requerido" });
-    }
-  
-    try {
-      const tokenRecord = await RefreshToken.findOne({ where: { token: refreshToken } });
-  
-      if (!tokenRecord) {
-        return res.status(403).json({ success: false, message: "Refresh token inválido" });
-      }
-  
-      // Verificar si el refresh token ha expirado
-      if (tokenRecord.expiresAt < new Date()) {
-        return res.status(403).json({ success: false, message: "Refresh token ha expirado" });
-      }
-  
-      const user = await User.findByPk(tokenRecord.userId);
-  
-      if (!user) {
-        return res.status(404).json({ success: false, message: "Usuario no encontrado" });
-      }
-  
-      const newAccessToken = jwt.sign(
-        {
-          userId: user.id,
-          name: user.name,
-          lastName: user.lastName,
-          email: user.email,
-          phone: user.phone,
-        },
-        config.jwtSecret,
-        { expiresIn: "1h" } 
-      );
-  
-      // Renovar el refresh token
-      const newRefreshToken = jwt.sign({}, config.jwtSecret, { expiresIn: "7d" });
-      tokenRecord.token = newRefreshToken;
-      tokenRecord.expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 días de expiración
-      await tokenRecord.save();
-  
-      res.status(200).json({
-        success: true,
-        accessToken: newAccessToken,
-        refreshToken: newRefreshToken,
-      });
-    } catch (error) {
-      console.error("Error al renovar el token:", error);
-      res.status(500).json({ success: false, message: "Error interno del servidor", error });
-    }
-  };
 }

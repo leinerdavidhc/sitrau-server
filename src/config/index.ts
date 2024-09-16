@@ -23,9 +23,10 @@ export class App{
         this.app.use(express.json())
         this.app.use(express.urlencoded({extended:false}))
         this.app.use(cors({
-            origin: 'http://localhost:3000', // Reemplaza con la URL de tu frontend
-            credentials: true // Permite credenciales (cookies, encabezados de autorización, etc.)
-          }));
+            origin: ['http://localhost:3000', 'exp://192.168.1.14:8081'],
+            credentials: true
+        }));
+        
         this.app.use(cookieParser());
     }
 

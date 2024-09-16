@@ -11,6 +11,8 @@ export default class UserRouter {
         this.router.post("/user/register", UserMiddleware.validateRegister, UserController.createUser);
         this.router.post("/user/login", UserMiddleware.validateLogin, UserController.login);
         this.router.get("/user/protected", UserMiddleware.authenticateToken, UserController.getProtectedData);
+        this.router.post("/user/preRegister", UserMiddleware.validateRegister,UserController.PreCreateUser);
+        this.router.post("/user/generateCode",UserController.generateCode)
     }
 
 }

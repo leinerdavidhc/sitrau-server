@@ -59,12 +59,11 @@ export default class UserMiddleware {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
     
-    if (token == null) return res.sendStatus(401);
+    if (token == null) return res.status(401).json({ message: "No token provided",authorized:false });
   
     jwt.verify(token, config.jwtSecret, (err, user) => {
       if (err) {
-        console.error('JWT Verification Error:', err);
-        return res.sendStatus(403);
+        return res.status(403).json({ message: 'Invalid token',authorized:false });
       }
       req.user = user;
       next();
