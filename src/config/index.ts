@@ -17,11 +17,13 @@ export class App {
         this.server = http.createServer(this.app); // Crear el servidor HTTP
         this.io = new SocketIOServer(this.server, {
             cors: {
-                origin: ['http://localhost:3000', 'exp://192.168.1.14:8081'],
+                origin: '*', // Permitir todos los orígenes
+                methods: ['GET', 'POST'],
+                allowedHeaders: ['Content-Type'],
                 credentials: true,
             },
         }); // Configurar Socket.IO con el servidor HTTP
-        
+
         this.setting();
         this.middlewares();
         this.routes();
@@ -37,10 +39,12 @@ export class App {
         this.app.use(express.json());
         this.app.use(express.urlencoded({ extended: false }));
         this.app.use(cors({
-            origin: ['http://localhost:3000', 'exp://192.168.1.14:8081'],
+            origin: '*', // Permitir todos los orígenes
+            methods: ['GET', 'POST', 'PUT', 'DELETE'],
+            allowedHeaders: ['Content-Type', 'Authorization'],
             credentials: true,
         }));
-        
+
         this.app.use(cookieParser());
     }
 
@@ -57,23 +61,22 @@ export class App {
                 // Emitir mensaje a otros clientes conectados
                 socket.broadcast.emit('message', data);
             });
-    
+
             // Manejo de errores
             socket.on('error', (error) => {
                 console.error('Socket error:', error);
             });
-    
+
             // Desconexión del socket
             socket.on('disconnect', () => {
                 console.log('User disconnected:', socket.id);
             });
         });
     }
-    
 
     // Modificación del método start para usar el servidor HTTP con Socket.IO
     async start(): Promise<void> {
         await this.server.listen(this.app.get('port'));
         console.log('Server on port', this.app.get('port'));
     }
-}
+} 
