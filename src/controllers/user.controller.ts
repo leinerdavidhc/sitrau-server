@@ -233,11 +233,10 @@ export default class UserController {
   }
 
   //controllador de obtener un usuario por email
-
-  public static async getUserByEmail(req: Request, res: Response) {
-    const { email } = req.params;
+  public static async getOneUser(req: Request, res: Response) {
+    const { id } = req.params;
     try {
-      const user = await User.findOne({ where: { email } });
+      const user = await User.findByPk(id)
 
       if (!user) {
         return res
